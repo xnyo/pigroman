@@ -54,3 +54,8 @@ optional arguments:
 $ python pigroman.py -e -z -s 1.5G -i "C:\fast_vapore\Skyrim Special Edition\ModOrganizer\mods\SkyVac-lfs\data" -o D:\bsaout -n "skyvac models and textures" -a "C:\fast_vapore\Skyrim Special Edition\Tools\Archive" -f textures meshes
 ```
 Creates compressed archives (-z) up to ~1.5GB size each (-s), taking `C:\fast_vapore\Skyrim Special Edition\ModOrganizer\mods\SkyVac-lfs\data` as data folder (-i), "textures"  and "meshes" subfolders (-f), placing the final archives inside "D:\bsaout" (-o),  naming them "skyvac models and textures0/1/2/3.bsa" (-n) and creating also "skyvac models and textures0/1/2/3.esl" (-e).
+
+
+### 🏁 TODO
+- [ ] Check Archive.exe logs to make sure that all files get added correctly
+- [ ] Add support for multiple Archive.exe instances running in parallel
