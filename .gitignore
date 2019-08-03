@@ -2,3 +2,4 @@
 venv/
 out_*.txt
 **/__pycache__/
+config.json

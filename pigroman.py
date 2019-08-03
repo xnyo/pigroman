@@ -10,6 +10,8 @@ from typing import Dict, List, Set
 from cached_property import cached_property
 import xxhash
 
+from utils import conversions
+
 
 def is_ascii(s: str) -> bool:
     """
@@ -20,21 +22,6 @@ def is_ascii(s: str) -> bool:
     :return: True if it contains only ASCII characters, False otherwise.
     """
     return all(ord(c) < 128 for c in s)
-
-
-def readable_size_to_number(s: str) -> int:
-    unit = s.lower()[-1]
-    mapping = {
-        "b": 1,
-        "k": 1024,
-        "m": 1024 * 1024,
-        "g": 1024 * 1024 * 1024
-    }
-    if unit.isdigit():
-        return int(s)
-    if unit in mapping:
-        return round(float(s[:-1]) * mapping[unit])
-    raise ValueError("Invalid block size. Examples: 1G, 800M, 1073741824")
 
 
 class File:
@@ -357,7 +344,7 @@ if __name__ == '__main__':
         required=True
     )
     args = parser.parse_args()
-    max_block_size = readable_size_to_number(args.max_block_size)
+    max_block_size = conversions.readable_size_to_number(args.max_block_size)
     st = time.monotonic()
     print(f"# Data path: {args.data}")
     print(f"# Folders to pack: {args.folder}")
