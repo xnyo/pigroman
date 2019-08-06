@@ -6,7 +6,7 @@ Pigroman takes loose files from your Skyrim Special Edition Mods (Skyrim Legenda
 
 ### 📂 How it works
 Pigroman takes one or more "Data" subfolders as input. It then scans the directories recursively and adds files to a specific path up until a certain size threshold is reached. Once the archive is big enough, a new archive is created. Pigroman also calculates the hash of each file, aggregating identical files into the same archive, so identical files are not stored multiple times, making mods with the same assets smaller in some circumstances.
-To create BSA/BA2 files, Pigroman uses Archive.exe, the packing utility included in the Creation Kit. Pigroman can also create empty .esl files for each archive. This is needed to load multiple BSA files in Skyrim Special Edition, since only one BSA file per esm/esp/esl is supported. The generated .esl files are totally empty and serve for the sole purpose to load the BSA files.
+To create BSA/BA2 files, Pigroman uses Archive.exe, the packing utility included in the Creation Kit. Pigroman can also create empty .esl files for each archive. This is needed to load multiple BSA files in Skyrim Special Edition, since only one BSA file per esm/esp/esl is supported. The generated .esl files are totally empty and serve for the sole purpose to load the BSA files. Alternatively, you can edit your INI files to load additional archives without having additional plugins.
 
 ### ⚙️ Installing
 You need Python 3.7 and pip to use Pigroman.
@@ -59,3 +59,4 @@ Creates compressed archives (-z) up to ~1.5GB size each (-s), taking `C:\fast_va
 ### 🏁 TODO
 - [ ] Check Archive.exe logs to make sure that all files get added correctly
 - [ ] Add support for multiple Archive.exe instances running in parallel
+- [ ] GUI
