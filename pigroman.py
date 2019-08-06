@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from collections import defaultdict
+from threading import Thread
 from typing import Dict, List, Set
 
 from cached_property import cached_property
@@ -71,10 +72,53 @@ class File:
         return f"{self.relative_path}\n"
 
 
+def archive_work(
+    block_i: int, archive_tool_path: str, compress: bool, data_path: str, output_folder: str, output_name: str
+) -> None:
+    # Write script
+    with open(f"{archive_tool_path}\\script_{block_i}.txt", "w") as f:
+        # TODO: Automatically determine CHECKs
+        for x in (
+            f"Log: log_{block_i}.txt",
+            "New Archive",
+            "Check: Textures",
+            "Check: Meshes",
+            "Check: Voices",
+            "Check: Sounds",
+            "Check: Misc",
+            "Check: Compress Archive" if compress else "",
+            f"Set File Group Root: {data_path}\\",
+            f"Add File Group: {archive_tool_path}\\files_{block_i}.txt",
+            f"Save Archive: {output_folder}\\{output_name}{block_i if block_i > 0 else ''}.bsa"
+        ):
+            f.write(f"{x}\r\n")
+
+    # Copy the files list
+    shutil.copy(f"out_{block_i}.txt", f"{archive_tool_path}\\files_{block_i}.txt")
+
+    # Execute Archive.exe, and provide it the script
+    subprocess.run([f"{archive_tool_path}\\Archive.exe", f"script_{block_i}.txt"], cwd=archive_tool_path)
+
+    # Delete temp script and files list
+    os.remove(f"{archive_tool_path}\\script_{block_i}.txt")
+    os.remove(f"{archive_tool_path}\\files_{block_i}.txt")
+
+
+def check_and_sanitize_data_subfolders(data_path: str, subfolders: List[str]) -> None:
+    for i in range(len(subfolders)):
+        subfolders[i] = subfolders[i].strip().rstrip("\\").lower()
+        if not subfolders[i].startswith(data_path):
+            subfolders[i] = f"{data_path}\\{subfolders[i]}"
+            if not os.path.isdir(subfolders[i]):
+                raise ValueError(f"{subfolders[i]} is not inside data path")
+
+
 def main(
     data_path: str, folders_to_pack: List[str], output_folder: str,
     output_name: str, archive_tool_path: str, max_block_size: int = 700 * 1024 * 1024,
-    compress: bool = False, create_esl: bool = True
+    compress: bool = False, create_esl: bool = True,
+    max_workers: int = 1, aggregate_duplicates: bool = False,
+    folders_to_ignore: List[str] = None,
 ) -> None:
     """
 
@@ -100,12 +144,18 @@ def main(
         raise ValueError("Data path must be a folder called Data")
 
     # Check all folders to pack. They must be data_path's subfolders
-    for i in range(len(folders_to_pack)):
-        folders_to_pack[i] = folders_to_pack[i].strip().lower()
-        if not folders_to_pack[i].startswith(data_path):
-            folders_to_pack[i] = f"{data_path}\\{folders_to_pack[i]}"
-            if not os.path.isdir(folders_to_pack[i]):
-                raise ValueError("Folder to pack must be inside data path")
+    check_and_sanitize_data_subfolders(data_path, folders_to_pack)
+    # for i in range(len(folders_to_pack)):
+    #     folders_to_pack[i] = folders_to_pack[i].strip().lower()
+    #     if not folders_to_pack[i].startswith(data_path):
+    #         folders_to_pack[i] = f"{data_path}\\{folders_to_pack[i]}"
+    #         if not os.path.isdir(folders_to_pack[i]):
+    #             raise ValueError("Folder to pack must be inside data path")
+
+    # Check all folders to ignore
+    if folders_to_ignore is None:
+        folders_to_ignore = []
+    check_and_sanitize_data_subfolders(data_path, folders_to_ignore)
 
     # xxhash -> set of duplicate 'File's
     duplicates: Dict[int, Set[File]] = defaultdict(set)
@@ -128,6 +178,11 @@ def main(
     for folder_to_pack in folders_to_pack:
         # Each subfolder
         for root, dirs, files_ in os.walk(folder_to_pack):
+            # Make sure this subfolder is not ignored
+            if any(root.lower().startswith(f_i) for f_i in folders_to_ignore):
+                print(f"! Skipped subfolder {root}")
+                continue
+
             # And each file
             for file in files_:
                 file_path = os.path.join(os.sep, root, file).lower()
@@ -154,7 +209,8 @@ def main(
                 )
 
                 # Add it to the duplicates defaultdict...
-                duplicates[file_object.hash].add(file_object)
+                if aggregate_duplicates:
+                    duplicates[file_object.hash].add(file_object)
 
                 # ...to the path -> File dictionary...
                 files[file_object.path] = file_object
@@ -207,15 +263,16 @@ def main(
                 # This file gets copied now
                 file.copied = True
 
-                # Copy all its duplicates as well
-                for duplicate in duplicates[file.hash]:
-                    if duplicate.path == file.path:
-                        # That's us, not a duplicate
-                        continue
+                # Copy all its duplicates as well if we're in aggregate mode
+                if aggregate_duplicates:
+                    for duplicate in duplicates[file.hash]:
+                        if duplicate.path == file.path:
+                            # That's us, not a duplicate
+                            continue
 
-                    # Actual duplicate, copy it as well
-                    f.write(duplicate.cli_format)
-                    duplicate.copied = True
+                        # Actual duplicate, copy it as well
+                        f.write(duplicate.cli_format)
+                        duplicate.copied = True
 
     # Calculate duplicates and saved size
     print(f"\n* Created file lists for {len(blocks)} blocks")
@@ -231,36 +288,31 @@ def main(
     # Pack files with Archive.exe
     # if input("Do you want to pack the files? [y/N]").lower().strip() != "y":
     #     return
+    workers: Set[Thread] = set()
     for i, block in enumerate(blocks):
         print(f"* Packing block {i+1}/{len(blocks)}")
+        w = Thread(
+            target=lambda: archive_work(
+                i,
+                archive_tool_path=archive_tool_path, compress=compress,
+                data_path=data_path, output_folder=output_folder, output_name=output_name
+            )
+        )
+        workers.add(w)
+        w.start()
 
-        # Write script
-        with open(f"{archive_tool_path}\\script.txt", "w") as f:
-            # TODO: Automatically determine CHECKs
-            for x in (
-                "Log: log.txt",
-                "New Archive",
-                "Check: Textures",
-                "Check: Meshes",
-                "Check: Voices",
-                "Check: Sounds",
-                "Check: Misc",
-                "Check: Compress Archive" if compress else "",
-                f"Set File Group Root: {data_path}\\",
-                f"Add File Group: {archive_tool_path}\\files.txt",
-                f"Save Archive: {output_folder}\\{output_name}{i if i > 0 else ''}.bsa"
-            ):
-                f.write(f"{x}\r\n")
+        # Wait for some worker to finish before spawning new ones
+        while len(workers) >= max_workers:
+            to_remove = set()
+            for w in workers:
+                w.join(timeout=1)
+                if not w.is_alive():
+                    to_remove.add(w)
+            workers -= to_remove
 
-        # Copy the files list
-        shutil.copy(f"out_{i}.txt", f"{archive_tool_path}\\files.txt")
-
-        # Execute Archive.exe, and provide it the script
-        subprocess.run([f"{archive_tool_path}\\Archive.exe", "script.txt"], cwd=archive_tool_path)
-
-        # Delete temp script and files list
-        os.remove(f"{archive_tool_path}\\script.txt")
-        os.remove(f"{archive_tool_path}\\files.txt")
+    # Wait for any remaining workers
+    for w in workers:
+        w.join()
 
     # Delete temp .bsl files left over by Archive.exe
     print("* Deleting .bsl files")
@@ -279,6 +331,13 @@ def main(
                 shutil.copy("empty.esl", f"{output_folder}\\{file_name}.esl")
 
 
+def cast_workers_number(x: str) -> int:
+    x = int(x)
+    if x <= 0:
+        raise argparse.ArgumentTypeError("Workers number must be > 0")
+    return x
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Splits and packs loose files in multiple Bethesda BSA files")
     parser.add_argument(
@@ -286,6 +345,15 @@ if __name__ == '__main__':
         "--compress",
         action="store_true",
         help="Compresses the output archives",
+        default=False,
+        required=False
+    )
+    parser.add_argument(
+        "-zz",
+        "--aggregate-duplicates",
+        action="store_true",
+        help="Experimental option that aggregates identical files into the same archive. "
+             "Archive.exe seems to ignore this.",
         default=False,
         required=False
     )
@@ -324,6 +392,13 @@ if __name__ == '__main__':
         required=True
     )
     parser.add_argument(
+        "-nf",
+        "--not-folder",
+        nargs="+",
+        help="Subfolders to exclude in the archive.",
+        required=False
+    )
+    parser.add_argument(
         "-o",
         "--output-folder",
         help="BSAs (and ESLs) will be put in this folder.",
@@ -341,16 +416,26 @@ if __name__ == '__main__':
         help="Absolute path to the folder that contains Archive.exe",
         required=True
     )
+    parser.add_argument(
+        "-p",
+        "--parallel",
+        help="Specified how many Archive.exe instances can be running at the same time",
+        type=cast_workers_number,
+        default=1,
+        required=False
+    )
     args = parser.parse_args()
     max_block_size = conversions.readable_size_to_number(args.max_block_size)
     st = time.monotonic()
     print(f"# Data path: {args.data}")
     print(f"# Folders to pack: {args.folder}")
+    print(f"# Folders NOT to pack: {args.not_folder}")
     print(f"# Output folder: {args.output_folder}")
     print(f"# Output base name: {args.output_name}[...].bsa")
     print(f"# Archive tool path: {args.archive_folder}")
     print(f"# Create ESL: {args.esl}")
     print(f"# Compress: {args.compress}")
+    print(f"# Aggregating: {args.aggregate_duplicates}")
     print(f"# Max block size: ~{max_block_size / 1024 / 1024} MB "
           f"(up to {(max_block_size + max_block_size / 4) / 1024 / 1024} MB)")
     if not os.path.isfile(f"{args.archive_folder}\\Archive.exe"):
@@ -359,12 +444,15 @@ if __name__ == '__main__':
     main(
         data_path=args.data,
         folders_to_pack=args.folder,
+        folders_to_ignore=args.not_folder,
         output_folder=args.output_folder,
         output_name=args.output_name,
         archive_tool_path=args.archive_folder,
         create_esl=args.esl,
         compress=args.compress,
-        max_block_size=max_block_size
+        max_block_size=max_block_size,
+        max_workers=args.parallel,
+        aggregate_duplicates=args.aggregate_duplicates
     )
     et = time.monotonic()
     print(f"* Took {et - st} s")
