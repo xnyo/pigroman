@@ -68,3 +68,8 @@ Creates compressed archives (-z) up to ~1.5GB size each (-s), taking `C:\fast_va
 - [ ] Check Archive.exe logs to make sure that all files get added correctly
 - [x] Add support for multiple Archive.exe instances running in parallel
 - [ ] GUI
+
+
+### 👩‍⚖️ License
+This project is licensed under the GNU AGPL 3 License.  
+See the “LICENSE” file for more information.
