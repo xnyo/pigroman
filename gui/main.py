@@ -1,3 +1,7 @@
+"""
+This is some GUI stuff I've recycled from another project.
+Don't look at the italian comments, they don't make sense and they'll go away once this is final.
+"""
 import json
 import os
 from collections import defaultdict, namedtuple

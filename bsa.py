@@ -1,3 +1,8 @@
+"""
+An attempt at making a Python BSA packer.
+I ended up using Archive.exe because I ran out of time.
+You can safely delete this file if you want.
+"""
 import functools
 import bisect
 import os
