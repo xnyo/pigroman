@@ -66,5 +66,5 @@ Creates compressed archives (-z) up to ~1.5GB size each (-s), taking `C:\fast_va
 
 ### 🏁 TODO
 - [ ] Check Archive.exe logs to make sure that all files get added correctly
-- [ ] Add support for multiple Archive.exe instances running in parallel
+- [x] Add support for multiple Archive.exe instances running in parallel
 - [ ] GUI
