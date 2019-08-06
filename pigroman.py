@@ -214,7 +214,7 @@ def main(
                         continue
 
                     # Actual duplicate, copy it as well
-                    f.write(file.cli_format)
+                    f.write(duplicate.cli_format)
                     duplicate.copied = True
 
     # Calculate duplicates and saved size
@@ -300,9 +300,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "-e",
         "--esl",
-        help="Creates an .esl for each archive. "
-             "Needed only when working with Skyrim Special Edition. "
-             "Not needed for Fallout 4.",
+        help="Creates an .esl for each archive.",
         action="store_true",
         default=False,
         required=False
